@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quadro Kanban - Tarefas</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f5f7; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        
+        .add-task-container { margin-bottom: 30px; display: flex; gap: 10px; }
+        input { padding: 10px; width: 300px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
+        button { padding: 10px 20px; background-color: #0079bf; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        button:hover { background-color: #005a8c; }
+
+        .board { display: flex; gap: 20px; width: 100%; max-width: 1000px; }
+        
+        .column { background-color: #ebecf0; border-radius: 8px; flex: 1; padding: 15px; display: flex; flex-direction: column; min-height: 400px; }
+        .column h2 { margin-top: 0; font-size: 18px; color: #172b4d; text-align: center; }
+        
+        .task-list { flex: 1; display: flex; flex-direction: column; gap: 10px; min-height: 100px; /* Área para soltar */ }
+        
+        .task { background-color: white; padding: 15px; border-radius: 5px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: grab; display: flex; justify-content: space-between; align-items: center; transition: background-color 0.2s; }
+        .task:active { cursor: grabbing; }
+        .task:hover { background-color: #f9f9f9; }
+        
+        .delete-btn { background: none; border: none; color: #dc3545; cursor: pointer; font-size: 18px; padding: 0 5px; }
+        .delete-btn:hover { color: #a71d2a; transform: scale(1.1); }
+    </style>
+</head>
+<body>
+
+    <h1>Meu To-Do List</h1>
+    
+    <div class="add-task-container">
+        <input type="text" id="taskInput" placeholder="Digite uma nova tarefa..." onkeypress="handleEnter(event)">
+        <button onclick="adicionarTarefa()">Adicionar</button>
+    </div>
+
+    <div class="board">
+        <div class="column">
+            <h2>Para Fazer</h2>
+            <div class="task-list" id="paraFazer" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
+        </div>
+
+        <div class="column">
+            <h2>Em Andamento</h2>
+            <div class="task-list" id="emAndamento" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
+        </div>
+
+        <div class="column">
+            <h2>Concluído</h2>
+            <div class="task-list" id="concluido" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
+        </div>
+    </div>
+
+    <script>
+        // Carrega as tarefas salvas no navegador ao abrir a página
+        document.addEventListener('DOMContentLoaded', carregarTarefas);
+
+        function handleEnter(e) {
+            if (e.key === 'Enter') adicionarTarefa();
+        }
+
+        function adicionarTarefa() {
+            const input = document.getElementById('taskInput');
+            const texto = input.value.trim();
+            
+            if (texto === '') return;
+
+            const id = 'task_' + Date.now(); // Gera um ID único
+            criarElementoTarefa(id, texto, 'paraFazer');
+            
+            salvarTarefas();
+            input.value = '';
+        }
+
+        function criarElementoTarefa(id, texto, colunaId) {
+            const task = document.createElement('div');
+            task.className = 'task';
+            task.id = id;
+            task.draggable = true;
+            task.ondragstart = drag;
+
+            const span = document.createElement('span');
+            span.textContent = texto;
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerHTML = '🗑️';
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.onclick = function() {
+                task.remove();
+                salvarTarefas();
+            };
+
+            task.appendChild(span);
+            task.appendChild(deleteBtn);
+
+            document.getElementById(colunaId).appendChild(task);
+        }
+
+        // --- Funções de Drag & Drop ---
+        function allowDrop(ev) {
+            ev.preventDefault(); // Necessário para permitir que o item seja solto
+        }
+
+        function drag(ev) {
+            ev.dataTransfer.setData("text", ev.target.id);
+        }
+
+        function drop(ev) {
+            ev.preventDefault();
+            const data = ev.dataTransfer.getData("text");
+            const draggedElement = document.getElementById(data);
+            
+            // Garante que o item caia na lista (.task-list) e não dentro de outra tarefa
+            if (ev.target.classList.contains('task-list')) {
+                ev.target.appendChild(draggedElement);
+            } else if (ev.target.closest('.task-list')) {
+                ev.target.closest('.task-list').appendChild(draggedElement);
+            }
+            salvarTarefas();
+        }
+
+        // --- Salvar e Carregar ---
+        function salvarTarefas() {
+            const listas = ['paraFazer', 'emAndamento', 'concluido'];
+            const dados = {};
+
+            listas.forEach(listaId => {
+                const tarefas = document.getElementById(listaId).children;
+                dados[listaId] = [];
+                for (let i = 0; i < tarefas.length; i++) {
+                    dados[listaId].push({
+                        id: tarefas[i].id,
+                        texto: tarefas[i].querySelector('span').textContent
+                    });
+                }
+            });
+
+            localStorage.setItem('tarefasKanban', JSON.stringify(dados));
+        }
+
+        function carregarTarefas() {
+            const dadosSalvos = localStorage.getItem('tarefasKanban');
+            if (dadosSalvos) {
+                const dados = JSON.parse(dadosSalvos);
+                const listas = ['paraFazer', 'emAndamento', 'concluido'];
+                
+                listas.forEach(listaId => {
+                    if (dados[listaId]) {
+                        dados[listaId].forEach(tarefa => {
+                            criarElementoTarefa(tarefa.id, tarefa.texto, listaId);
+                        });
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html>
